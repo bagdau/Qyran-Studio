@@ -90,6 +90,15 @@ npm run dev
 
 Браузерде Vite берген жергілікті URL-ды ашыңыз.
 
+### Backend + PostgreSQL (Docker Compose)
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+API: `http://localhost:8000` · Swagger: `http://localhost:8000/docs` · Healthcheck: `http://localhost:8000/health`
+
 ### Production build
 
 ```bash
@@ -103,6 +112,9 @@ npm run test:sites
 - **Vite 6** — жылдам development/build workflow
 - **Material Symbols** — studio иконографиясы
 - **CSS** — responsive layout, halftone texture және comic-studio визуалды жүйесі
+- **FastAPI** — REST API және автоматты OpenAPI/Swagger құжаттамасы
+- **PostgreSQL 16** — жобалар, сахналар және медиа-ассеттерді сақтау
+- **Docker Compose** — API мен дерекқорды бір командамен іске қосу
 
 ## 🗂️ Жоба құрылымы
 
@@ -114,6 +126,11 @@ src/
 public/assets/
  ├── folklore-catalog.png
  └── folklore-styles.png
+backend/
+ ├── app/             # FastAPI, SQLAlchemy модельдері және REST роуттар
+ ├── Dockerfile
+ └── requirements.txt
+docker-compose.yml     # FastAPI + PostgreSQL development stack
 ```
 
 ## 🚀 Hackathon бағыты
