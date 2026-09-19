@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "./api";
 
 const stories = [
   "Ер Төстік",
@@ -89,7 +90,7 @@ function Stat({ label, value, accent }) {
   );
 }
 
-function Dashboard({ go }) {
+function Dashboard({ go, projects, loading, error, selectProject }) {
   return (
     <section className="page dashboard-page">
       <div className="dash-hero">
@@ -112,7 +113,7 @@ function Dashboard({ go }) {
       <div className="filterbar">
         {icon("search")}
         <input placeholder="Атауы, тег немесе автор бойынша іздеу" />
-        <button className="filter-on">БАРЛЫҒЫ (4)</button>
+        <button className="filter-on">БАРЛЫҒЫ ({projects.length})</button>
         <button>ЖАРИЯЛАНҒАН</button>
         <button>ӨҢДЕУДЕ</button>
         <button>СОҢҒЫ ӨЗГЕРІС</button>
@@ -125,11 +126,19 @@ function Dashboard({ go }) {
       </div>
       <div className="section-label">
         <h2>БЕЛСЕНДІ ӨНДІРІСТЕГІ ХИКАЯЛАР</h2>
-        <span>4 ХИКАЯ</span>
+        <span>{projects.length} ХИКАЯ</span>
       </div>
       <div className="story-grid">
-        {stories.map((story, i) => (
-          <article className="story-card" key={story}>
+        {loading && <p className="api-message">Хикаялар жүктелуде…</p>}
+        {error && <p className="api-message api-error">{error}</p>}
+        {!loading && !error && projects.length === 0 && (
+          <p className="api-message">
+            Әзірше сақталған хикая жоқ. Алғашқы комиксті AI шебері арқылы
+            жасаңыз.
+          </p>
+        )}
+        {projects.map((story, i) => (
+          <article className="story-card" key={story.id}>
             <div
               className="story-art art-{i}"
               style={{
@@ -148,18 +157,18 @@ function Dashboard({ go }) {
               </em>
             </div>
             <div className="story-body">
-              <h2>{story}</h2>
-              <p>{storyInfo[story]}</p>
+              <h2>{story.title}</h2>
+              <p>{story.synopsis || story.source_text || "Сценарий сипаттамасы әлі қосылмаған."}</p>
               <div>
                 <span>
                   САХНА
                   <br />
-                  <b>{[8, 6, 5, 4][i]}</b>
+                  <b>{story.scenes.length}</b>
                 </span>
                 <span>
                   КАДР
                   <br />
-                  <b>{[24, 20, 16, 12][i]}</b>
+                  <b>{story.scenes.reduce((total, scene) => total + scene.panel_count, 0)}</b>
                 </span>
                 <span>
                   ӨЗГЕРІС
@@ -167,7 +176,12 @@ function Dashboard({ go }) {
                   <b>БҮГІН</b>
                 </span>
               </div>
-              <button onClick={() => go("editor")}>
+              <button
+                onClick={() => {
+                  selectProject(story);
+                  go("editor");
+                }}
+              >
                 {icon("edit_document")} РЕДАКТОРДА АШУ
               </button>
             </div>
@@ -188,7 +202,7 @@ function Dashboard({ go }) {
   );
 }
 
-function Create({ project, setProject, go }) {
+function Create({ project, setProject, go, createProject, creating, error }) {
   const [style, setStyle] = useState(0);
   const [text, setText] = useState(
     `${project.toUpperCase()} · ҚАЗАҚ ЕРТЕГІСІ\n\n${storyInfo[project] || storyInfo["Ер Төстік"]}`,
@@ -306,9 +320,23 @@ function Create({ project, setProject, go }) {
           </article>
           <article className="generate-box">
             <div>3 САХНА · 9 КАДР · AI STORYBOARD</div>
-            <button onClick={() => go("editor")}>
-              СТОРИБОРДТЫ ГЕНЕРАЦИЯЛАУ →
+            <button
+              disabled={creating}
+              onClick={() =>
+                createProject({
+                  title: project,
+                  synopsis: storyInfo[project] || text.slice(0, 240),
+                  source_text: text,
+                  visual_style: ["epic_graphic", "manga_anime", "kids_animation"][
+                    style
+                  ],
+                  layout: "classic_page",
+                })
+              }
+            >
+              {creating ? "САҚТАЛУДА…" : "СТОРИБОРДТЫ ГЕНЕРАЦИЯЛАУ →"}
             </button>
+            {error && <small className="api-error">{error}</small>}
             <small>Шамамен 30 секунд · Кейін редакторда баптауға болады</small>
           </article>
         </aside>
@@ -317,18 +345,25 @@ function Create({ project, setProject, go }) {
   );
 }
 
-function Editor({ project, go }) {
+function Editor({ project, projectData, addScene, addingScene }) {
   const [scene, setScene] = useState(3);
   const [selected, setSelected] = useState(3);
+  const editorScenes = projectData?.scenes || [];
+  const activeScene = editorScenes[scene] || editorScenes[0];
   return (
     <section className="editor-page">
       <aside className="scene-rail">
         <b>САХНАЛАР РЕЛЬСІ</b>
-        {["Кіріспе", "Жолға шығу", "Жеті қат жер", "Шешуші сәт"].map((s, i) => (
+        {(editorScenes.length
+          ? editorScenes
+          : ["Кіріспе", "Жолға шығу", "Жеті қат жер", "Шешуші сәт"].map(
+              (title, position) => ({ title, position, panel_count: position + 3 }),
+            )
+        ).map((s, i) => (
           <button
             className={scene === i ? "scene-active" : ""}
             onClick={() => setScene(i)}
-            key={s}
+            key={s.id || s.title}
           >
             <span
               style={{
@@ -338,15 +373,19 @@ function Editor({ project, go }) {
             ></span>
             <div>
               <strong>0{i + 1}</strong>
-              <b>{s}</b>
+              <b>{s.title}</b>
               <small>
-                {i + 3} кадр · {9 + i * 3}с
+                {s.panel_count} кадр · {9 + i * 3}с
               </small>
             </div>
           </button>
         ))}
-        <button className="add-scene" onClick={() => setScene(4)}>
-          {icon("add_box")} САХНА ҚОСУ
+        <button
+          className="add-scene"
+          disabled={!projectData || addingScene}
+          onClick={() => addScene(projectData.id, editorScenes.length)}
+        >
+          {icon("add_box")} {addingScene ? "ҚОСЫЛУДА…" : "САХНА ҚОСУ"}
         </button>
       </aside>
       <main className="canvas">
@@ -358,7 +397,9 @@ function Editor({ project, go }) {
           <button>{icon("animation")} Animate</button>
         </div>
         <div className="scene-title">
-          <h1>САХНА 04: ШЕШУШІ СӘТ</h1>
+          <h1>
+            САХНА {String((activeScene?.position ?? 3) + 1).padStart(2, "0")}: {activeScene?.title || "ШЕШУШІ СӘТ"}
+          </h1>
           <span>ПАРАЛЛАКС ДИНАМИКАСЫ БЕЛСЕНДІ</span>
         </div>
         <div className="comic-canvas">
@@ -552,16 +593,116 @@ function Assets() {
 export function App() {
   const [page, setPage] = useState("dashboard");
   const [project, setProject] = useState("Ер Төстік");
+  const [projectData, setProjectData] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [addingScene, setAddingScene] = useState(false);
+  const [apiError, setApiError] = useState("");
+
+  const loadProjects = async () => {
+    setLoading(true);
+    try {
+      const data = await api.listProjects();
+      setProjects(data);
+      setProjectData((current) =>
+        current ? data.find((item) => item.id === current.id) || current : null,
+      );
+      setApiError("");
+    } catch {
+      setApiError("API-ге қосылу мүмкін болмады. Docker Compose іске қосулы екенін тексеріңіз.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const selectProject = (selectedProject) => {
+    setProject(selectedProject.title);
+    setProjectData(selectedProject);
+  };
+
+  const createProject = async (payload) => {
+    setCreating(true);
+    setApiError("");
+    try {
+      const created = await api.createProject(payload);
+      const scenes = await Promise.all(
+        ["Кіріспе", "Оқиғаның басталуы", "Шешуші сәт"].map((title, position) =>
+          api.createScene(created.id, { title, position, panel_count: 3 }),
+        ),
+      );
+      const completedProject = { ...created, scenes };
+      setProjects((current) => [completedProject, ...current]);
+      selectProject(completedProject);
+      setPage("editor");
+    } catch (error) {
+      setApiError(error.message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const addScene = async (projectId, position) => {
+    setAddingScene(true);
+    try {
+      const scene = await api.createScene(projectId, {
+        title: `Жаңа сахна ${position + 1}`,
+        position,
+        panel_count: 3,
+      });
+      setProjectData((current) =>
+        current ? { ...current, scenes: [...current.scenes, scene] } : current,
+      );
+      setProjects((current) =>
+        current.map((item) =>
+          item.id === projectId
+            ? { ...item, scenes: [...item.scenes, scene] }
+            : item,
+        ),
+      );
+    } catch (error) {
+      setApiError(error.message);
+    } finally {
+      setAddingScene(false);
+    }
+  };
+
   const go = (p) => setPage(p);
   return (
     <main className="studio-shell">
       <Header page={page} go={go} project={project} />
       <Rail page={page} go={go} />
-      {page === "dashboard" && <Dashboard go={go} />}{" "}
-      {page === "create" && (
-        <Create project={project} setProject={setProject} go={go} />
+      {page === "dashboard" && (
+        <Dashboard
+          go={go}
+          projects={projects}
+          loading={loading}
+          error={apiError}
+          selectProject={selectProject}
+        />
       )}{" "}
-      {page === "editor" && <Editor project={project} go={go} />}{" "}
+      {page === "create" && (
+        <Create
+          project={project}
+          setProject={setProject}
+          go={go}
+          createProject={createProject}
+          creating={creating}
+          error={apiError}
+        />
+      )}{" "}
+      {page === "editor" && (
+        <Editor
+          project={project}
+          projectData={projectData}
+          addScene={addScene}
+          addingScene={addingScene}
+        />
+      )}{" "}
       {page === "mobile" && <Mobile project={project} />}{" "}
       {page === "assets" && <Assets />}
     </main>

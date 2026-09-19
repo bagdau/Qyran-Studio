@@ -3,12 +3,8 @@ services:
     build:
       context: ./backend
     container_name: qyran-api
-    env_file:
-      - path: .env
-        required: false
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-qyran}:${POSTGRES_PASSWORD:-qyran_dev_password}@db:5432/${POSTGRES_DB:-qyran}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      POSTGRES_HOST: db
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -21,16 +17,16 @@ services:
   db:
     image: postgres:16-alpine
     container_name: qyran-db
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-qyran}
-      POSTGRES_USER: ${POSTGRES_USER:-qyran}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qyran_dev_password}
+    env_file:
+      - path: .env
+        required: false
+        format: raw
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qyran} -d ${POSTGRES_DB:-qyran}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-qyran} -d $${POSTGRES_DB:-qyran}"]
       interval: 5s
       timeout: 5s
       retries: 10
